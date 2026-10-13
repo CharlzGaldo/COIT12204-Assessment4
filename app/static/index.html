@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Task Priority Agent</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #8a8f9c;
+    --accent: #5b8cff;
+    --high: #ff5b5b;
+    --medium: #ffb84d;
+    --low: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .wrap { width: 100%; max-width: 780px; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-bottom: 24px; font-size: 0.9rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 90px;
+    background: #0f1115;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.95rem;
+    resize: vertical;
+    font-family: inherit;
+  }
+  button {
+    margin-top: 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .result { display: none; }
+  .result-item {
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .result-task-text { font-size: 0.82rem; color: var(--muted); margin: 4px 0 8px; }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+  }
+  .badge.High { background: rgba(255,91,91,0.15); color: var(--high); }
+  .badge.Medium { background: rgba(255,184,77,0.15); color: var(--medium); }
+  .badge.Low { background: rgba(74,222,128,0.15); color: var(--low); }
+  .fallback-note {
+    color: var(--medium);
+    font-size: 0.8rem;
+    margin-top: 8px;
+  }
+  .reasoning { color: var(--text); line-height: 1.5; }
+  .state-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.detail-cell { max-width: 340px; overflow-wrap: anywhere; line-height: 1.6; }
+  .detail-line { margin-bottom: 2px; }
+  .detail-line:last-child { margin-bottom: 0; }
+  .detail-line b { color: var(--text); }
+  .stat-row { display: flex; gap: 24px; margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+  .stat-row b { color: var(--text); }
+  .error-box {
+    display: none;
+    color: var(--high);
+    background: rgba(255,91,91,0.1);
+    border: 1px solid rgba(255,91,91,0.3);
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+  }
+  .empty { color: var(--muted); font-size: 0.85rem; }
+
+  /* --- Tabs --- */
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tab-btn {
+    margin-top: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+  }
+  .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* --- Checklist view: kanban board with 3 always-visible columns --- */
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .board-column {
+    background: #0f1115;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    min-height: 90px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .board-column.drag-over {
+    background: rgba(91,140,255,0.08);
+    border-color: var(--accent);
+  }
+  .column-title {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .column-title.High { color: var(--high); }
+  .column-title.Medium { color: var(--medium); }
+  .column-title.Low { color: var(--low); }
+  .column-empty-hint {
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: center;
+    padding: 16px 4px;
+  }
+  .task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    background: var(--panel);
+    cursor: grab;
+  }
+  .task-item.dragging { opacity: 0.35; }
+  .task-item.done { opacity: 0.45; }
+  .task-item.done .task-text { text-decoration: line-through; }
+  .task-item input[type="checkbox"] {
+    margin-top: 3px;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+  }
+  .task-item .task-body { flex: 1; min-width: 0; }
+  .task-item .task-text { font-size: 0.86rem; word-wrap: break-word; }
+  .task-item .task-reasoning {
+    font-size: 0.74rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .task-item .remove-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1rem;
+    margin: 0;
+    padding: 0 2px;
+    flex-shrink: 0;
+  }
+  .task-item .remove-btn:hover { color: var(--high); }
+  .progress-note { color: var(--muted); font-size: 0.85rem; margin-top: 10px; }
+  .list-actions { display: flex; gap: 10px; align-items: center; }
+  .list-actions button { margin-top: 0; }
+  .board-hint { color: var(--muted); font-size: 0.8rem; margin-bottom: 14px; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Task Priority Classification Agent</h1>
+  <div class="sub">LangChain + Gemini agent — classifies tasks as High / Medium / Low priority</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnSingle" onclick="showView('single')">Classify Task</button>
+    <button class="tab-btn" id="tabBtnList" onclick="showView('list')">Task List</button>
+  </div>
+
+  <!-- ============ VIEW 1: classify (single or multiple lines) ============ -->
+  <div class="view active" id="viewSingle">
+    <div class="panel">
+      <div class="sub" style="margin-bottom:8px;">Enter one task, or paste several — one per line.</div>
+      <textarea id="taskInput" placeholder="Server is down in production, fix ASAP&#10;Update the README&#10;Water the office plant"></textarea>
+      <div>
+        <button id="submitBtn" onclick="classify()">Classify</button>
+      </div>
+      <div class="progress-note" id="classifyProgress"></div>
+      <div class="error-box" id="errorBox"></div>
+    </div>
+
+    <!-- One detail block per task from the most recent batch. Cleared
+         at the start of the next classify() call. -->
+    <div class="panel result" id="resultPanel">
+      <div id="resultsContainer"></div>
+    </div>
+
+    <div class="panel">
+      <div class="state-header">
+        <strong>Agent State</strong>
+        <span class="empty" id="stateEmptyHint"></span>
+      </div>
+      <div class="stat-row">
+        <div>Error count: <b id="errorCount">0</b></div>
+        <div>Actions logged: <b id="historyCount">0</b></div>
+      </div>
+      <table id="historyTable" style="display:none;">
+        <thead><tr><th>Time</th><th>Action</th><th>Detail</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="state-header">
+        <strong>Agent Communication Log</strong>
+        <span class="empty" id="traceHint">Classify a task to see the agents talk.</span>
+      </div>
+      <div class="stat-row">
+        <div>Trace: <b id="traceId">-</b></div>
+        <div>Status: <b id="traceStatus">-</b></div>
+        <div>Attempts: <b id="traceIterations">-</b></div>
+        <div>Messages routed: <b id="traceSteps">-</b></div>
+      </div>
+      <table id="traceTable" style="display:none;">
+        <thead><tr><th>Step</th><th>Event</th><th>Logged by</th><th>Message</th><th>Detail</th></tr></thead>
+        <tbody id="traceBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ VIEW 2: task list — kanban board, drag to move ============ -->
+  <div class="view" id="viewList">
+    <div class="panel">
+      <div class="state-header">
+        <strong>Your Tasks</strong>
+        <div class="list-actions">
+          <span class="empty" id="checklistEmptyHint">No tasks yet.</span>
+          <button class="secondary" onclick="clearChecklist()">Clear List</button>
+        </div>
+      </div>
+      <div class="board-hint">Drag a task into another column to change its priority.</div>
+      <div class="board" id="board">
+        <div class="board-column" id="columnHigh" data-priority="High">
+          <div class="column-title High">High priority</div>
+          <div class="column-body" id="columnBodyHigh"></div>
+        </div>
+        <div class="board-column" id="columnMedium" data-priority="Medium">
+          <div class="column-title Medium">Medium priority</div>
+          <div class="column-body" id="columnBodyMedium"></div>
+        </div>
+        <div class="board-column" id="columnLow" data-priority="Low">
+          <div class="column-title Low">Low priority</div>
+          <div class="column-body" id="columnBodyLow"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "";
+const STORAGE_KEY = "priority_agent_checklist";
+const PRIORITY_ORDER = { High: 0, Medium: 1, Low: 2 };
+
+// ---------------- Tabs ----------------
+function showView(name) {
+  document.getElementById("viewSingle").classList.toggle("active", name === "single");
+  document.getElementById("viewList").classList.toggle("active", name === "list");
+  document.getElementById("tabBtnSingle").classList.toggle("active", name === "single");
+  document.getElementById("tabBtnList").classList.toggle("active", name === "list");
+  if (name === "list") renderChecklist();
+}
+
+// ---------------- Classify (single or multi-line) ----------------
+function renderResultItem(taskText, result) {
+  const item = document.createElement("div");
+  item.className = "result-item";
+
+  const badge = document.createElement("span");
+  badge.className = "badge " + result.priority;
+  badge.textContent = result.priority;
+
+  const taskLabel = document.createElement("div");
+  taskLabel.className = "result-task-text";
+  taskLabel.textContent = taskText;
+
+  const reasoning = document.createElement("div");
+  reasoning.className = "reasoning";
+  reasoning.textContent = result.reasoning;
+
+  item.appendChild(badge);
+  item.appendChild(taskLabel);
+  item.appendChild(reasoning);
+
+  if (result.fallback) {
+    const fb = document.createElement("div");
+    fb.className = "fallback-note";
+    fb.textContent = "⚠ Fallback classification used — " + (result.fallback_reason || "the agents could not produce a validated answer.");
+    item.appendChild(fb);
+  } else if (result.validated) {
+    const ok = document.createElement("div");
+    ok.className = "reasoning";
+    ok.textContent = `✔ Validated by the Validator agent after ${result.iterations} attempt(s) / ${result.steps} messages.`;
+    item.appendChild(ok);
+  }
+
+  return item;
+}
+
+async function classify() {
+  const input = document.getElementById("taskInput");
+  const btn = document.getElementById("submitBtn");
+  const errorBox = document.getElementById("errorBox");
+  const resultPanel = document.getElementById("resultPanel");
+  const resultsContainer = document.getElementById("resultsContainer");
+  const progress = document.getElementById("classifyProgress");
+
+  errorBox.style.display = "none";
+  resultPanel.style.display = "none";
+  // Clear last batch's details as soon as a new batch starts.
+  resultsContainer.innerHTML = "";
+  progress.textContent = "";
+
+  const lines = input.value
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  if (lines.length === 0) {
+    errorBox.textContent = "Please enter at least one task description.";
+    errorBox.style.display = "block";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Classifying...";
+  const tasks = loadChecklist();
+  let failed = 0;
+
+  // Classified sequentially (not in parallel) to avoid bursting the
+  // Gemini API with simultaneous requests when several lines are pasted in.
+  for (let i = 0; i < lines.length; i++) {
+    if (lines.length > 1) {
+      progress.textContent = `Classifying ${i + 1} of ${lines.length}...`;
+    }
+    try {
+      const result = await classifyOne(lines[i]);
+      lastResult = result;  // used by the communication-log panel
+
+      // Add this task's own detail block — every task in the batch gets
+      // one, not just the last.
+      resultsContainer.appendChild(renderResultItem(lines[i], result));
+      resultPanel.style.display = "block";
+
+      // Every classified task also lands in the shared checklist.
+      tasks.push({
+        id: `${Date.now()}-${i}`,
+        description: lines[i],
+        priority: result.priority,
+        reasoning: result.reasoning,
+        fallback: result.fallback,
+        done: false,
+        addedAt: Date.now(),
+      });
+      saveChecklist(tasks);
+    } catch (err) {
+      failed++;
+    }
+  }
+
+  progress.textContent = lines.length > 1
+    ? `Done — ${lines.length - failed} of ${lines.length} added to your task list.`
+    : "";
+
+  if (failed > 0) {
+    errorBox.textContent = `${failed} task(s) could not be classified. Check that the server is running.`;
+    errorBox.style.display = "block";
+  }
+
+  input.value = "";
+  btn.disabled = false;
+  btn.textContent = "Classify";
+  loadState();
+  loadTrace();
+}
+
+// Build a state-history "detail" object as one bold-labelled line per
+// field, instead of raw inline JSON like {"priority":"High","reasoning":"..."}.
+// Returns a DOM element (built with createElement/textContent throughout,
+// so nothing in a task description or reasoning string can be interpreted
+// as HTML) rather than a string, so the "key:" label can be bolded safely.
+function buildDetailElement(detail) {
+  const wrapper = document.createElement("div");
+
+  if (detail && typeof detail === "object") {
+    Object.entries(detail).forEach(([key, value]) => {
+      const shown = (value && typeof value === "object") ? JSON.stringify(value) : value;
+      const line = document.createElement("div");
+      line.className = "detail-line";
+
+      const label = document.createElement("b");
+      label.textContent = key + ": ";
+
+      line.appendChild(label);
+      line.appendChild(document.createTextNode(String(shown)));
+      wrapper.appendChild(line);
+    });
+  } else if (detail !== null && detail !== undefined) {
+    wrapper.textContent = detail;
+  }
+
+  return wrapper;
+}
+
+async function loadState() {
+  const hint = document.getElementById("stateEmptyHint");
+  try {
+    const resp = await fetch(`${API_BASE}/api/agent/state`);
+    const data = await resp.json();
+
+    document.getElementById("errorCount").textContent = data.error_count;
+    document.getElementById("historyCount").textContent = data.history.length;
+
+    const table = document.getElementById("historyTable");
+    const body = document.getElementById("historyBody");
+    body.innerHTML = "";
+
+    if (data.history.length === 0) {
+      table.style.display = "none";
+      hint.textContent = "No actions logged yet.";
+    } else {
+      hint.textContent = "";
+      table.style.display = "table";
+      [...data.history].reverse().forEach(h => {
+        const tr = document.createElement("tr");
+        const time = new Date(h.timestamp).toLocaleTimeString();
+
+        const timeTd = document.createElement("td");
+        timeTd.textContent = time;
+        const actionTd = document.createElement("td");
+        actionTd.textContent = h.action;
+        const detailTd = document.createElement("td");
+        detailTd.className = "detail-cell";
+        // Built via DOM elements (see buildDetailElement) — safe even if
+        // a task description or reasoning string contains HTML-looking
+        // text, while still letting each field's label render in bold.
+        detailTd.appendChild(buildDetailElement(h.detail));
+
+        tr.appendChild(timeTd);
+        tr.appendChild(actionTd);
+        tr.appendChild(detailTd);
+        body.appendChild(tr);
+      });
+    }
+  } catch (err) {
+    hint.textContent = "Could not load state.";
+  }
+}
+
+// ---------------- Agent communication log (multi-agent view) ----------------
+let lastResult = null;
+
+async function loadTrace() {
+  const hint = document.getElementById("traceHint");
+  if (!lastResult || !lastResult.trace_id) return;
+  document.getElementById("traceId").textContent = lastResult.trace_id;
+  document.getElementById("traceStatus").textContent =
+    lastResult.status + (lastResult.fallback_reason ? ` (${lastResult.fallback_reason})` : "");
+  document.getElementById("traceIterations").textContent = lastResult.iterations;
+  document.getElementById("traceSteps").textContent = lastResult.steps;
+  try {
+    const resp = await fetch(`${API_BASE}/api/agent/trace/${lastResult.trace_id}`);
+    const data = await resp.json();
+    const body = document.getElementById("traceBody");
+    body.innerHTML = "";
+    data.events.forEach(ev => {
+      const tr = document.createElement("tr");
+      const route = ev.sender ? `${ev.sender} → ${ev.receiver}: ${ev.intent}` : "";
+      let detail = ev.detail || "";
+      if (!detail && ev.content) {
+        const c = ev.content;
+        detail = [c.priority && `priority=${c.priority}`, c.attempt && `attempt=${c.attempt}`,
+                  c.issues && c.issues.length && `issues=${c.issues.join(" | ")}`]
+                 .filter(Boolean).join("  ");
+      }
+      [ev.step ?? "", ev.event, ev.agent, route, detail].forEach(text => {
+        const td = document.createElement("td");
+        td.textContent = text;  // textContent: safe even if content has HTML-looking text
+        if (ev.level === "ERROR" || ev.level === "WARNING") td.style.color = "var(--high)";
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    document.getElementById("traceTable").style.display = "table";
+    hint.textContent = "";
+  } catch (err) {
+    hint.textContent = "Could not load communication log.";
+  }
+}
+
+async function classifyOne(task_description) {
+  const resp = await fetch(`${API_BASE}/api/agent/classify_priority`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task_description })
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.detail || "Classification failed.");
+  }
+  return data;
+}
+
+// ---------------- Task list (pure display, fed by classify()) ----------------
+function loadChecklist() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveChecklist(tasks) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+}
+
+// Builds one draggable card. `draggable="true"` plus the dragstart handler
+// below is what makes HTML5 drag-and-drop work — the browser handles the
+// actual drag visuals, we just need to record which task is being dragged.
+function buildTaskCard(task) {
+  const item = document.createElement("div");
+  item.className = "task-item" + (task.done ? " done" : "");
+  item.draggable = true;
+  item.dataset.taskId = task.id;
+
+  item.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", task.id);
+    e.dataTransfer.effectAllowed = "move";
+    // Slight delay so the browser has already captured the drag image
+    // before we visually fade the original card.
+    setTimeout(() => item.classList.add("dragging"), 0);
+  });
+  item.addEventListener("dragend", () => item.classList.remove("dragging"));
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = !!task.done;
+  checkbox.onchange = () => toggleDone(task.id);
+
+  const bodyEl = document.createElement("div");
+  bodyEl.className = "task-body";
+  const textEl = document.createElement("div");
+  textEl.className = "task-text";
+  textEl.textContent = task.description;
+  const reasonEl = document.createElement("div");
+  reasonEl.className = "task-reasoning";
+  reasonEl.textContent = (task.fallback ? "⚠ fallback — " : "") + task.reasoning;
+  bodyEl.appendChild(textEl);
+  bodyEl.appendChild(reasonEl);
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "remove-btn";
+  removeBtn.textContent = "✕";
+  removeBtn.title = "Remove task";
+  removeBtn.onclick = () => removeTask(task.id);
+
+  item.appendChild(checkbox);
+  item.appendChild(bodyEl);
+  item.appendChild(removeBtn);
+  return item;
+}
+
+// Renders all three columns every time — High, Medium, and Low are always
+// visible (even empty), so there's always somewhere to drop a card.
+function renderChecklist() {
+  const tasks = loadChecklist();
+  const hint = document.getElementById("checklistEmptyHint");
+  hint.textContent = tasks.length === 0 ? "No tasks yet." : "";
+
+  const columns = {
+    High: document.getElementById("columnBodyHigh"),
+    Medium: document.getElementById("columnBodyMedium"),
+    Low: document.getElementById("columnBodyLow"),
+  };
+
+  Object.values(columns).forEach(col => { col.innerHTML = ""; });
+
+  const grouped = { High: [], Medium: [], Low: [] };
+  tasks.forEach(task => {
+    (grouped[task.priority] || grouped.Medium).push(task);
+  });
+
+  Object.keys(grouped).forEach(priority => {
+    // Newest first within a column.
+    const sorted = [...grouped[priority]].sort((a, b) => b.addedAt - a.addedAt);
+    if (sorted.length === 0) {
+      const emptyHint = document.createElement("div");
+      emptyHint.className = "column-empty-hint";
+      emptyHint.textContent = "Drop a task here";
+      columns[priority].appendChild(emptyHint);
+    } else {
+      sorted.forEach(task => columns[priority].appendChild(buildTaskCard(task)));
+    }
+  });
+}
+
+// Wires up drag-over / drop handling for all three columns. Called once
+// at startup — the columns themselves are static, only their contents
+// (built above) are re-rendered.
+function initBoardDragTargets() {
+  ["High", "Medium", "Low"].forEach(priority => {
+    const column = document.getElementById(`column${priority}`);
+
+    column.addEventListener("dragover", (e) => {
+      e.preventDefault(); // required to allow a drop
+      column.classList.add("drag-over");
+    });
+    column.addEventListener("dragleave", () => {
+      column.classList.remove("drag-over");
+    });
+    column.addEventListener("drop", (e) => {
+      e.preventDefault();
+      column.classList.remove("drag-over");
+      const taskId = e.dataTransfer.getData("text/plain");
+      moveTaskToPriority(taskId, priority);
+    });
+  });
+}
+
+function moveTaskToPriority(taskId, newPriority) {
+  const tasks = loadChecklist();
+  const task = tasks.find(t => t.id === taskId);
+  if (task && task.priority !== newPriority) {
+    task.priority = newPriority;
+    task.manuallySet = true; // note it was a manual override, not the agent's call
+    saveChecklist(tasks);
+    renderChecklist();
+  }
+}
+
+function toggleDone(id) {
+  const tasks = loadChecklist();
+  const task = tasks.find(t => t.id === id);
+  if (task) task.done = !task.done;
+  saveChecklist(tasks);
+  renderChecklist();
+}
+
+function removeTask(id) {
+  const tasks = loadChecklist().filter(t => t.id !== id);
+  saveChecklist(tasks);
+  renderChecklist();
+}
+
+function clearChecklist() {
+  saveChecklist([]);
+  renderChecklist();
+}
+
+// ---------------- Init ----------------
+loadState();
+initBoardDragTargets();
+renderChecklist();
+</script>
+</body>
+</html>
