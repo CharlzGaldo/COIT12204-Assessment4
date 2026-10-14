@@ -153,12 +153,4 @@ python -m scripts.demo --live "Server is down in production, fix ASAP"   # real 
 pytest -v
 ```
 
-All LLM calls are faked; no API key or network is required.
 
-## AI assistance declaration
-
-The Assessment 3 scaffold and the Assessment 4 multi-agent extension (message
-protocol, orchestrator, agents, tests, demo script) were drafted with Claude
-(Anthropic) assistance. **Edit this section** to state what you wrote, changed
-and debugged yourself, and keep your own failure cases, log screenshots and
-refinements in the report.
