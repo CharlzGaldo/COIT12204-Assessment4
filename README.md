@@ -13,7 +13,7 @@ coordinated by an **orchestrator**:
 https://priority-agent-458025859336.australia-southeast1.run.app
 
 # View the video demo
-(add your Assessment 4 video link here)
+https://youtu.be/ZyzAIHHXK-I
 
 # Self-Deploy
 Read the Deploy.md file
